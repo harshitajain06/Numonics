@@ -32,8 +32,8 @@ export default function TopicDetails() {
           <Text style={styles.section}>🧠 Mnemonic</Text>
           <Text style={styles.content}>{mnemonic || 'N/A'}</Text>
 
-          <Text style={styles.section}>🗣️ Dhruv’s Version</Text>
-          <Text style={styles.content}>{dhruv || 'N/A'}</Text>
+          {/* <Text style={styles.section}>🗣️ Dhruv’s Version</Text>
+          <Text style={styles.content}>{dhruv || 'N/A'}</Text> */}
         </View>
       </ScrollView>
     </View>

@@ -61,7 +61,7 @@ export default function LearnPage() {
                 title: item.id,
                 formula: item.formula,
                 mnemonic: item.mnemonic,
-                dhruv: item.dhruv,
+                // dhruv: item.dhruv,
               })
             }
           >
