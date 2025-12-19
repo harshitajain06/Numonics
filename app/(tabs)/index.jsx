@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, Image } from 'react-native';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../config/firebase';
 import { useNavigation } from '@react-navigation/native';
-import Toast from 'react-native-toast-message';
+import { LinearGradient } from 'expo-linear-gradient';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
+import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { auth } from '../../config/firebase';
+
+const { width, height } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
 
 const Login = () => {
   const [user, loading, error] = useAuthState(auth);
@@ -12,6 +16,9 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isFocused, setIsFocused] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -19,156 +26,385 @@ const Login = () => {
     }
   }, [user]);
 
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password) => {
+    return password.length >= 6;
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    if (!password.trim()) {
+      newErrors.password = 'Password is required';
+    } else if (!validatePassword(password)) {
+      newErrors.password = 'Password must be at least 6 characters long';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const clearError = (field) => {
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
   const handleLogin = async () => {
+    // Clear previous errors
+    setErrors({});
+    
+    // Validate form before submission
+    if (!validateForm()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Please fix the errors below',
+        position: 'top',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Show success alert
-      Alert.alert('Success', 'Logged in successfully!');
-
       // Show success toast
       Toast.show({
         type: 'success',
-        text1: 'Logged in successfully!',
+        text1: 'Welcome back!',
+        text2: 'You have been logged in successfully',
+        position: 'top',
+        visibilityTime: 3000,
       });
 
       // Navigate to the home screen or dashboard
       navigation.navigate('Drawer');
     } catch (error) {
       let errorMessage;
+      let errorField = 'general';
+      
       switch (error.code) {
         case 'auth/invalid-email':
           errorMessage = 'The email address is not valid.';
+          errorField = 'email';
           break;
         case 'auth/user-disabled':
           errorMessage = 'This user account has been disabled.';
           break;
         case 'auth/user-not-found':
-          errorMessage = 'There is no user record corresponding to this email.';
+          errorMessage = 'No account found with this email address.';
+          errorField = 'email';
           break;
         case 'auth/wrong-password':
           errorMessage = 'The password is incorrect.';
+          errorField = 'password';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later.';
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your connection.';
           break;
         default:
-          errorMessage = 'An unknown error occurred. Please try again later.';
+          errorMessage = 'An unexpected error occurred. Please try again.';
       }
 
-      // Show error alert
-      Alert.alert('Error', errorMessage);
+      // Set field-specific error
+      if (errorField !== 'general') {
+        setErrors(prev => ({ ...prev, [errorField]: errorMessage }));
+      }
 
       // Show error toast
       Toast.show({
         type: 'error',
-        text1: 'Error',
+        text1: 'Login Failed',
         text2: errorMessage,
+        position: 'top',
+        visibilityTime: 4000,
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Logo */}
-      <Image source={require('../../assets/images/Logo.png')} style={styles.logo} />
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <LinearGradient
+          colors={['#667eea', '#764ba2', '#f093fb']}
+          style={styles.gradient}
+        >
+          <View style={styles.contentContainer}>
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+              <Image source={require('../../assets/images/Logo.png')} style={styles.logo} />
+            </View>
 
-      {/* Title */}
-      <Text style={styles.title}>Login</Text>
+            {/* Title */}
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Sign in to your account</Text>
 
-      {/* Email Input */}
-      <TextInput
-        style={[
-          styles.input,
-          { borderColor: isFocused === 'email' ? '#007BFF' : '#ccc' }
-        ]}
-        placeholder="Email"
-        placeholderTextColor="#666"
-        value={email}
-        onChangeText={setEmail}
-        onFocus={() => setIsFocused('email')}
-        onBlur={() => setIsFocused(null)}
-      />
+            {/* Form Container */}
+            <View style={styles.formContainer}>
+              {/* Email Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Email Address</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { 
+                      borderColor: errors.email ? '#ff6b6b' : (isFocused === 'email' ? '#667eea' : '#e1e8ed'),
+                      backgroundColor: errors.email ? '#fff5f5' : '#fff'
+                    }
+                  ]}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#a0aec0"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    clearError('email');
+                  }}
+                  onFocus={() => setIsFocused('email')}
+                  onBlur={() => setIsFocused(null)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+                {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              </View>
 
-      {/* Password Input */}
-      <TextInput
-        style={[
-          styles.input,
-          { borderColor: isFocused === 'password' ? '#007BFF' : '#ccc' }
-        ]}
-        placeholder="Password"
-        placeholderTextColor="#666"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        onFocus={() => setIsFocused('password')}
-        onBlur={() => setIsFocused(null)}
-      />
+              {/* Password Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[
+                      styles.passwordInput,
+                      { 
+                        borderColor: errors.password ? '#ff6b6b' : (isFocused === 'password' ? '#667eea' : '#e1e8ed'),
+                        backgroundColor: errors.password ? '#fff5f5' : '#fff'
+                      }
+                    ]}
+                    placeholder="Enter your password"
+                    placeholderTextColor="#a0aec0"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      clearError('password');
+                    }}
+                    onFocus={() => setIsFocused('password')}
+                    onBlur={() => setIsFocused(null)}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity 
+                    style={styles.eyeButton}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Text style={styles.eyeText}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+              </View>
 
-      {/* Login Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={handleLogin} style={styles.button}>
-          <Text style={styles.buttonText}>Login</Text>
-        </TouchableOpacity>
+              {/* Login Button */}
+              <TouchableOpacity 
+                onPress={handleLogin} 
+                style={[styles.button, isLoading && styles.buttonDisabled]}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>Sign In</Text>
+                )}
+              </TouchableOpacity>
 
-        {/* Register Link */}
-        <View style={styles.registerContainer}>
-          <Text style={styles.registerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.registerLink}>Register</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              {/* Register Link */}
+              <View style={styles.registerContainer}>
+                <Text style={styles.registerText}>Don't have an account? </Text>
+                <TouchableOpacity 
+                  onPress={() => navigation.navigate('Register')}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.registerLink}>Sign Up</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+      </ScrollView>
       <Toast />
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    minHeight: height,
+  },
+  gradient: {
+    flex: 1,
+    minHeight: height,
+  },
+  contentContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#DCE9FE',
-    paddingHorizontal: 20,
+    paddingHorizontal: isWeb ? Math.min(width * 0.1, 40) : 20,
+    paddingVertical: 40,
+  },
+  logoContainer: {
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   logo: {
-    width: 100, // Adjust size to fit well on the screen
-    height: 100,
-    marginBottom: 20,
+    width: isWeb ? 120 : 100,
+    height: isWeb ? 120 : 100,
+    borderRadius: 20,
   },
   title: {
-    fontSize: 36,
+    fontSize: isWeb ? 42 : 36,
     fontWeight: 'bold',
-    color: '#567396',
-    marginBottom: 30,
+    color: '#fff',
+    marginBottom: 8,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subtitle: {
+    fontSize: isWeb ? 18 : 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 40,
+    textAlign: 'center',
+  },
+  formContainer: {
+    width: '100%',
+    maxWidth: isWeb ? 400 : width * 0.9,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: isWeb ? 40 : 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2d3748',
+    marginBottom: 8,
   },
   input: {
     width: '100%',
-    height: 50,
-    borderBottomWidth: 1,
-    paddingHorizontal: 15,
-    marginBottom: 15,
+    height: 56,
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#2d3748',
     backgroundColor: '#fff',
-    color: '#333',
-    borderRadius: 10,
-  },
-  buttonContainer: {
-    width: '100%',
-    padding: 35,
-  },
-  button: {
-    backgroundColor: 'white',
-    paddingVertical: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  passwordContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    width: '100%',
+    height: 56,
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingRight: 50,
+    fontSize: 16,
+    color: '#2d3748',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    padding: 4,
+  },
+  eyeText: {
+    fontSize: 20,
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 14,
+    marginTop: 6,
+    fontWeight: '500',
+  },
+  button: {
+    backgroundColor: '#667eea',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  buttonDisabled: {
+    backgroundColor: '#a0aec0',
+    shadowOpacity: 0.1,
   },
   buttonText: {
-    color: '#567396',
+    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -179,13 +415,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   registerText: {
-    color: '#333',
+    color: '#4a5568',
     fontSize: 16,
   },
   registerLink: {
-    color: '#007BFF',
+    color: '#667eea',
     fontSize: 16,
     fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });
 
